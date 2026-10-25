@@ -294,6 +294,32 @@
           Ready to excel? Your next session is waiting.
         </p>
       </section>
+      <!-- Student ID card -->
+      <section id="candidate-card-section" class="mb-lg hidden">
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm p-md">
+          <h3 class="font-headline-md text-headline-md text-primary mb-1">My Student ID Card</h3>
+          <p class="font-body-md text-body-md text-on-surface-variant mb-4">Your official {{short_name}} identity card. Download it or print it in ID-card size. Anyone can scan the QR code to confirm your details.</p>
+          <div id="photo-notice" class="hidden mb-4 rounded-lg border border-amber-400 bg-amber-50 p-3 text-sm flex flex-wrap items-center gap-3">
+            <span class="flex-1 min-w-[200px]"><b>Add your passport photo.</b> Your card is not complete until it has your photo.</span>
+            <button id="photo-add" class="bg-primary text-on-primary px-4 py-2 rounded-lg font-label-md text-label-md">Take / upload photo</button>
+          </div>
+          <div id="candidate-card-preview" class="grid gap-4 md:grid-cols-2"></div>
+          <div class="flex flex-wrap gap-3 mt-4">
+            <button id="photo-change" class="hidden border border-primary text-primary px-4 py-2 rounded-lg font-label-md text-label-md">Change photo</button>
+            <button id="card-print" class="bg-primary text-on-primary px-4 py-2 rounded-lg font-label-md text-label-md">Print / Save as PDF</button>
+            <button id="card-dl-front" class="border border-primary text-primary px-4 py-2 rounded-lg font-label-md text-label-md">Download front (PNG)</button>
+            <button id="card-dl-back" class="border border-primary text-primary px-4 py-2 rounded-lg font-label-md text-label-md">Download back (PNG)</button>
+          </div>
+        </div>
+      </section>
+      <!-- Exams set by my teachers -->
+      <section id="class-exams-section" class="mb-lg hidden">
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm p-md">
+          <h3 class="font-headline-md text-headline-md text-primary mb-1">Exams from my teachers</h3>
+          <p class="font-body-md text-body-md text-on-surface-variant mb-4">Set by your class teachers. You can take each exam once.</p>
+          <div id="class-exams-list" class="grid gap-4 md:grid-cols-2"></div>
+        </div>
+      </section>
       <!-- Bento Grid Dashboard -->
       <div class="bento-grid">
         <!-- Primary Actions Card -->
@@ -879,5 +905,9 @@
         waitForSupabase();
       });
     </script>
+  <script src="./scripts/qr.js"></script>
+    <script src="./scripts/passport-photo.js"></script>
+    <script src="./scripts/candidate-card.js"></script>
+    <script src="./scripts/student-extras.js"></script>
   </body>
 </html>

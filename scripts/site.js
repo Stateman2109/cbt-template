@@ -388,14 +388,15 @@ async function signUpUser(fullName, email, password, extra = {}) {
 }
 
 function redirectToDashboard(role = "student") {
-  const page =
-    role === "admin" || role === "government"
-      ? "admin-dashboard.html"
-      : role === "teacher"
-        ? "teacher-dashboard.html"
-        : "student-dashboard.html";
-
-  window.location.href = page;
+  const pages = {
+    admin: "admin-dashboard.html",
+    government: "admin-dashboard.html",
+    principal: "principal-dashboard.html",
+    teacher_junior: "teacher-dashboard.html",
+    teacher_senior: "teacher-dashboard.html",
+    teacher: "teacher-dashboard.html",
+  };
+  window.location.href = pages[role] || "student-dashboard.html";
 }
 
 function showNotification(message, type = "info") {

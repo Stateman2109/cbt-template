@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<script src="./scripts/config.js"></script>
+<script src="./scripts/brand.js"></script>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Principal Dashboard | {{school_name}}</title>
+<link rel="icon" data-slot="favicon" href="data:," />
+<script src="https://cdn.tailwindcss.com"></script>
+<style>body{font-family:Inter,system-ui,sans-serif;background:rgb(var(--c-surface-bright));color:rgb(var(--c-on-surface))}</style>
+</head>
+<body>
+<header class="bg-[rgb(var(--c-primary))] text-[rgb(var(--c-on-primary))] border-b-4 border-[rgb(var(--c-secondary))]">
+  <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <img data-slot="logo" class="w-11 h-11 object-contain bg-white rounded-full p-0.5" alt="{{school_name}} logo" />
+      <div><h1 class="text-lg font-bold leading-tight" id="title">{{short_name_upper}} PRINCIPAL DASHBOARD</h1><p class="text-xs opacity-80">{{school_name}}</p></div>
+    </div>
+    <div class="flex items-center gap-3 text-sm"><span id="who" class="hidden sm:inline opacity-90"></span><button id="logout" class="border border-current rounded-lg px-3 py-1.5">Sign out</button></div>
+  </div>
+</header>
+<main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+<div id="status" class="bg-white border rounded-xl p-6 text-center text-gray-600">Loading…</div>
+<div id="app" class="hidden space-y-6">
+  <div id="kpis" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3"></div>
+  <section class="bg-white border rounded-xl"><div class="p-4 border-b"><h2 class="font-semibold text-lg">Classes (Junior and Senior)</h2><p class="text-sm text-gray-500">Click a class to filter the student list.</p></div><div class="overflow-x-auto"><table class="w-full text-sm" id="class-table"></table></div></section>
+
+  <section class="bg-white border rounded-xl"><div class="p-4 border-b"><h2 class="font-semibold text-lg">Junior and Senior sections</h2><p class="text-sm text-gray-500">Click a section to filter the lists below.</p></div><div class="overflow-x-auto"><table class="w-full text-sm" id="section-table"></table></div></section>
+  <section class="bg-white border rounded-xl">
+    <div class="p-4 border-b flex flex-wrap items-center gap-2 justify-between"><div><h2 class="font-semibold text-lg">Students</h2><p class="text-sm text-gray-500" id="detail-sub"></p></div>
+      <div class="flex flex-wrap gap-2"><select id="f-section" class="border rounded-lg px-3 py-2 text-sm"></select><select id="f-class" class="border rounded-lg px-3 py-2 text-sm"></select><input id="f-search" placeholder="Search name…" class="border rounded-lg px-3 py-2 text-sm w-44" /><button id="f-csv" class="border rounded-lg px-3 py-2 text-sm">Export CSV</button></div></div>
+    <div class="overflow-x-auto"><table class="w-full text-sm" id="student-table"></table></div>
+  </section>
+  <section id="panels" class="grid gap-4 md:grid-cols-2"></section>
+
+  <section class="bg-white border rounded-xl"><div class="p-4 border-b"><h2 class="font-semibold text-lg">Exams set by teachers</h2><p class="text-sm text-gray-500">Read-only. Teachers create and publish these from their own dashboards.</p></div><div class="overflow-x-auto"><table class="w-full text-sm" id="exam-table"></table></div></section>
+</div>
+</main>
+<script src="./scripts/supabase.min.js"></script>
+<script src="./scripts/staff-common.js"></script>
+<script>
+const S = Staff, $ = S.$, db = S.db, esc = S.esc;
+let D, EXAMS = [], SEC = "";
+const st = { key: "avg", dir: "desc" };
+const COLS = [["full_name", "Student"], ["candidate_no", "Student no."], ["section", "Section"], ["class_level", "Class"], ["exams", "Exams taken"], ["avg", "Performance"]];
+(async () => {
+  try {
+    await window.BRAND_READY;
+    const ctx = await S.start(["principal", "admin", "government"]);
+    if (!ctx) return;
+    D = await S.load(ctx.portal.id, null);
+    const r = await db.from("class_exams").select("*").order("created_at", { ascending: false }); EXAMS = r.data || [];
+    build(); $("status").classList.add("hidden"); $("app").classList.remove("hidden");
+  } catch (e) { console.error(e); S.status("Could not load: " + esc(e.message)); }
+})();
+const inSec = (arr) => (SEC ? arr.filter((s) => s.section === SEC) : arr);
+function build() {
+  const rows = D.rows, part = rows.filter((s) => s.exams > 0).length;
+  S.kpis([["Students", S.fmt(rows.length)], ["Junior", S.fmt(rows.filter((s) => s.section === "Junior").length)], ["Senior", S.fmt(rows.filter((s) => s.section === "Senior").length)], ["Exams taken", S.fmt(D.results.length)], ["Average score", S.pct(S.avg(D.results.map((r) => r.p)))], ["Participation", rows.length ? S.pct((part / rows.length) * 100) : "–"]]);
+  const g = S.group(rows, (s) => s.section);
+  $("section-table").innerHTML = '<thead class="bg-gray-50 text-left text-gray-600"><tr><th class="p-3">Section</th><th class="p-3">Students</th><th class="p-3">Exams</th><th class="p-3">Average</th><th class="p-3">Participation</th></tr></thead><tbody>' +
+    ["Junior", "Senior"].map((k) => { const ss = g[k] || [], w = ss.filter((s) => s.exams > 0); return `<tr class="border-t hover:bg-gray-50 cursor-pointer" data-sec="${k}"><td class="p-3 font-medium">${k}</td><td class="p-3">${S.fmt(ss.length)}</td><td class="p-3">${S.fmt(ss.reduce((n, s) => n + s.exams, 0))}</td><td class="p-3">${S.pct(S.avg(w.map((s) => s.avg)))}</td><td class="p-3">${ss.length ? S.pct((w.length / ss.length) * 100) : "–"}</td></tr>`; }).join("") + "</tbody>";
+  document.querySelectorAll("#section-table tr[data-sec]").forEach((tr) => (tr.onclick = () => { $("f-section").value = tr.dataset.sec; draw(); }));
+  $("f-section").innerHTML = '<option value="">Junior + Senior</option><option>Junior</option><option>Senior</option>';
+  $("f-class").innerHTML = '<option value="">All classes</option>' + [...new Set(rows.map((s) => s.class_level))].sort().map((c) => `<option>${esc(c)}</option>`).join("");
+  S.classTable($("class-table"), rows, (c) => { $("f-class").value = c; draw(); $("student-table").scrollIntoView({ behavior: "smooth" }); });
+  S.panels($("panels"), D); exams(); draw();
+}
+const visible = () => { const se = $("f-section").value, cl = $("f-class").value, q = $("f-search").value.toLowerCase(); return D.rows.filter((s) => (!se || s.section === se) && (!cl || s.class_level === cl) && (!q || (s.full_name || "").toLowerCase().includes(q))); };
+function draw() { const rows = S.studentTable($("student-table"), visible(), st, COLS, draw); $("detail-sub").textContent = `${rows.length} student${rows.length === 1 ? "" : "s"} shown` + (rows.length > 500 ? " (first 500 displayed – export CSV for all)" : ""); }
+["f-section", "f-class"].forEach((i) => ($(i).onchange = draw)); $("f-search").oninput = draw;
+$("f-csv").onclick = () => S.csv("students.csv", ["Student", "Student no.", "Section", "Class", "Exams", "Average %"], visible().map((s) => [s.full_name, s.candidate_no, s.section, s.class_level, s.exams, s.avg == null ? "" : s.avg.toFixed(1)]));
+function exams() {
+  const stateOf = (e) => { const n = Date.now(); return !e.published ? "Draft" : !e.is_active ? "Switched off" : e.opens_at && new Date(e.opens_at) > n ? "Scheduled" : e.closes_at && new Date(e.closes_at) < n ? "Closed" : "Open"; };
+  $("exam-table").innerHTML = '<thead class="bg-gray-50 text-left text-gray-600"><tr><th class="p-3">Exam</th><th class="p-3">Section</th><th class="p-3">Status</th><th class="p-3">Questions</th><th class="p-3">Taken</th><th class="p-3">Average</th></tr></thead><tbody>' +
+    (EXAMS.map((e) => { const t = D.allResults.filter((r) => r.class_exam_id === e.id); return `<tr class="border-t"><td class="p-3"><b>${esc(e.title)}</b><div class="text-xs text-gray-500">${esc(e.subject)}</div></td><td class="p-3">${S.cap(e.section)}</td><td class="p-3">${stateOf(e)}</td><td class="p-3">${e.question_count}</td><td class="p-3">${t.length}</td><td class="p-3">${S.pct(S.avg(t.map((r) => r.p)))}</td></tr>`; }).join("") || '<tr><td class="p-4 text-gray-500" colspan="6">No teacher exams yet.</td></tr>') + "</tbody>";
+}
+</script>
+</body>
+</html>

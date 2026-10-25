@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<script src="./scripts/config.js"></script>
+<script src="./scripts/brand.js"></script>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Verify Student – {{school_name}}</title>
+<link rel="icon" data-slot="favicon" href="data:," />
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Arial,Helvetica,sans-serif;background:rgb(var(--c-surface-container-low));color:rgb(var(--c-on-surface))}
+  header{background:rgb(var(--c-primary));color:rgb(var(--c-on-primary));padding:16px;display:flex;align-items:center;gap:12px;border-bottom:6px solid rgb(var(--c-secondary))}
+  header img{width:48px;height:48px;object-fit:contain;background:#fff;border-radius:50%}
+  header b{display:block;font-size:17px}header span{font-size:12px;font-weight:bold;letter-spacing:.05em;opacity:.85}
+  main{max-width:480px;margin:20px auto;padding:0 16px}
+  .card{background:#fff;border:1px solid rgb(var(--c-outline-variant));border-radius:14px;padding:20px;box-shadow:0 4px 18px rgba(0,0,0,.06)}
+  .badge{display:inline-block;padding:6px 14px;border-radius:99px;font-weight:bold;font-size:14px}
+  .ok{background:#dff3e5;color:#0b6b32}.bad{background:#fde3e3;color:#a11212}
+  dl{margin:16px 0 0}dt{font-size:12px;color:rgb(var(--c-on-surface-variant));font-weight:bold;margin-top:12px}
+  dd{margin:2px 0 0;font-size:18px;font-weight:bold;word-break:break-word}
+  a.btn{display:block;text-align:center;margin-top:22px;background:rgb(var(--c-primary));color:rgb(var(--c-on-primary));text-decoration:none;padding:14px;border-radius:10px;font-weight:bold}
+  p.note{font-size:12px;text-align:center;margin-top:14px;color:rgb(var(--c-on-surface-variant))}
+</style>
+</head>
+<body>
+<header><img data-slot="logo" alt="" /><div><b>{{short_name_upper}} CBT</b><span>STUDENT VERIFICATION</span></div></header>
+<main><div class="card" id="box">Checking card…</div><p class="note">This page shows limited public details only.</p></main>
+<script>
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+(async () => {
+  const box = document.getElementById("box"), C = window.CBT_CONFIG;
+  const token = new URLSearchParams(location.search).get("c") || "";
+  const bad = (m) => (box.innerHTML = `<span class="badge bad">NOT VERIFIED</span><p>${m}</p><a class="btn" href="./">Go to the school CBT</a>`);
+  if (token.length < 40) return bad("This card code is not valid.");
+  try {
+    const r = await fetch(C.SUPABASE_URL + "/rest/v1/rpc/verify_school_card", { method: "POST", headers: { apikey: C.SUPABASE_ANON_KEY, "Content-Type": "application/json" }, body: JSON.stringify({ p_token: token }) });
+    const rows = await r.json(), c = Array.isArray(rows) && rows[0];
+    if (!c) return bad("No student was found for this card.");
+    const photo = c.photo_at ? `<img alt="Student photo" style="display:block;width:150px;height:200px;object-fit:cover;border:3px solid rgb(var(--c-primary));border-radius:10px;margin:16px 0 0" src="${C.SUPABASE_URL}/storage/v1/object/public/student-photos/${encodeURIComponent(token)}.jpg?v=${encodeURIComponent(c.photo_at)}" onerror="this.style.display='none'" />` : `<p style="font-size:13px;color:#a56a00;margin:14px 0 0">No passport photo has been added to this card yet.</p>`;
+    const sec = c.student_section ? c.student_section[0].toUpperCase() + c.student_section.slice(1) : "-";
+    box.innerHTML = `<span class="badge ok">✔ VERIFIED STUDENT</span>${photo}<dl>
+      <dt>STUDENT NAME</dt><dd>${esc(String(c.full_name || "").toUpperCase())}</dd>
+      <dt>STUDENT NUMBER</dt><dd>${esc(c.candidate_no)}</dd>
+      <dt>SCHOOL</dt><dd>${esc(c.school_name)}</dd>
+      <dt>CLASS</dt><dd>${esc(c.class_level)}</dd>
+      <dt>SECTION</dt><dd>${esc(sec)}</dd></dl><a class="btn" href="./">Go to the school CBT</a>`;
+  } catch (e) { bad("Could not check this card right now. Please try again."); }
+})();
+</script>
+</body>
+</html>

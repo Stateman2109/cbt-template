@@ -256,6 +256,26 @@
         window.supabaseClient = dbClient;
         await loadCandidateInfo();
 
+        // ---- Exam set by the student's own teacher: load it from the database ----
+        if (examDataGlobal.classExamId) {
+          const { data: au } = await dbClient.auth.getUser();
+          const uid = au?.user?.id;
+          const { data: ce } = await dbClient.from("class_exams").select("*").eq("id", examDataGlobal.classExamId).maybeSingle();
+          const nowMs = Date.now();
+          const unavailable = !ce || !uid || !ce.published || !ce.is_active || (ce.opens_at && new Date(ce.opens_at).getTime() > nowMs) || (ce.closes_at && new Date(ce.closes_at).getTime() < nowMs);
+          if (unavailable) { localStorage.removeItem("examData"); alert("This exam is not available for your account."); window.location.href = "student-dashboard.html"; return; }
+          const { data: done } = await dbClient.from("results").select("id").eq("class_exam_id", ce.id).eq("user_id", uid).limit(1);
+          if (done && done.length) { localStorage.removeItem("examData"); alert("You have already taken this exam."); window.location.href = "student-dashboard.html"; return; }
+          const { data: cq, error: cqErr } = await dbClient.from("class_exam_questions").select("*").eq("exam_id", ce.id).order("position", { ascending: true });
+          if (cqErr || !cq || !cq.length) { document.getElementById("questions-container").innerHTML = "<p>This exam has no questions yet.</p>"; return; }
+          examTime = ce.duration_minutes * 60;
+          allQuestions = shuffleArray(cq).map((q) => ({ ...q, correct_answer: normalizeAnswer(q) }));
+          renderQuestion();
+          startExamTimer();
+          setInterval(() => { if (answerKeyGlobal) localStorage.setItem(answerKeyGlobal, JSON.stringify(userAnswers)); }, 5000);
+          return;
+        }
+
         const subject = examDataGlobal.subject;
         const category = examDataGlobal.category;
         const year = examDataGlobal.year;
@@ -742,7 +762,9 @@
     ${review}
   `;
 
-        const examName = examDataGlobal
+        const examName = examDataGlobal?.classExamId
+          ? examDataGlobal.title
+          : examDataGlobal
           ? `${examDataGlobal.subject || ""} ${examDataGlobal.year || ""} ${examDataGlobal.type || ""}`.trim()
           : "Unknown Exam";
         const status = percent >= 50 ? "PASSED" : "FAILED";
@@ -772,6 +794,7 @@
               exam_year: examDataGlobal?.year
                 ? Number(examDataGlobal.year)
                 : null,
+              ...(examDataGlobal?.classExamId ? { class_exam_id: examDataGlobal.classExamId } : {}),
               score,
               total: allQuestions.length,
               status,

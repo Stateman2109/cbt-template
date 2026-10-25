@@ -46,7 +46,7 @@
   }
   function tokens(row) {
     var n = (row && row.school_name) || "School CBT Portal", s = row.short_name || n, loc = row.location || "", city = row.city || loc.split(",")[0] || "";
-    var T = { school_name: n, school_name_upper: n.toUpperCase(), short_name: s, short_name_upper: s.toUpperCase(), city: city, location: loc, tagline: row.tagline || "", address: row.address || "", phone: row.phone || "", email: row.email || "" };
+    var T = { school_name: n, school_name_upper: n.toUpperCase(), short_name: s, short_name_upper: s.toUpperCase(), city: city, location: loc, tagline: row.tagline || "", logo_url: row.logo_url || "", address: row.address || "", phone: row.phone || "", email: row.email || "" };
     window.BRAND = T; return T;
   }
   function collect() {

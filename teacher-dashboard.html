@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<script src="./scripts/config.js"></script>
+<script src="./scripts/brand.js"></script>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Teacher Dashboard | {{school_name}}</title>
+<link rel="icon" data-slot="favicon" href="data:," />
+<script src="https://cdn.tailwindcss.com"></script>
+<style>body{font-family:Inter,system-ui,sans-serif;background:rgb(var(--c-surface-bright));color:rgb(var(--c-on-surface))}</style>
+</head>
+<body>
+<header class="bg-[rgb(var(--c-primary))] text-[rgb(var(--c-on-primary))] border-b-4 border-[rgb(var(--c-secondary))]">
+  <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <img data-slot="logo" class="w-11 h-11 object-contain bg-white rounded-full p-0.5" alt="{{school_name}} logo" />
+      <div><h1 class="text-lg font-bold leading-tight" id="title">{{short_name_upper}} TEACHER DASHBOARD</h1><p class="text-xs opacity-80">{{school_name}}</p></div>
+    </div>
+    <div class="flex items-center gap-3 text-sm"><span id="who" class="hidden sm:inline opacity-90"></span><button id="logout" class="border border-current rounded-lg px-3 py-1.5">Sign out</button></div>
+  </div>
+</header>
+<main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+<div id="status" class="bg-white border rounded-xl p-6 text-center text-gray-600">Loading…</div>
+<div id="app" class="hidden space-y-6">
+  <div id="kpis" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3"></div>
+  <section class="bg-white border rounded-xl"><div class="p-4 border-b"><h2 class="font-semibold text-lg">My classes</h2><p class="text-sm text-gray-500">Click a class to filter the student list.</p></div><div class="overflow-x-auto"><table class="w-full text-sm" id="class-table"></table></div></section>
+
+  <section class="bg-white border rounded-xl">
+    <div class="p-4 border-b flex flex-wrap items-center gap-2 justify-between"><div><h2 class="font-semibold text-lg">Students</h2><p class="text-sm text-gray-500" id="detail-sub"></p></div>
+      <div class="flex flex-wrap gap-2"><select id="f-class" class="border rounded-lg px-3 py-2 text-sm"></select><input id="f-search" placeholder="Search name…" class="border rounded-lg px-3 py-2 text-sm w-44" /><button id="f-csv" class="border rounded-lg px-3 py-2 text-sm">Export CSV</button></div></div>
+    <div class="overflow-x-auto"><table class="w-full text-sm" id="student-table"></table></div>
+  </section>
+  <section id="panels" class="grid gap-4 md:grid-cols-2"></section>
+
+  <section class="bg-white border rounded-xl">
+    <div class="p-4 border-b flex flex-wrap justify-between items-center gap-2"><div><h2 class="font-semibold text-lg">My exams</h2><p class="text-sm text-gray-500">Only your <b id="sec-name"></b> students will see these exams.</p></div><button id="x-new" class="bg-[rgb(var(--c-primary))] text-[rgb(var(--c-on-primary))] rounded-lg px-4 py-2 text-sm">New exam</button></div>
+    <form id="exam-form" class="hidden p-4 grid gap-3 md:grid-cols-6 border-b items-end">
+      <label class="md:col-span-2 text-xs text-gray-500">Title<input id="x-title" required class="border rounded-lg px-3 py-2 text-sm" style="width:100%" placeholder="e.g. First Term Test" /></label>
+      <label class="text-xs text-gray-500">Subject<input id="x-subject" required class="border rounded-lg px-3 py-2 text-sm" style="width:100%" /></label>
+      <label class="text-xs text-gray-500">Minutes<input id="x-duration" type="number" min="1" max="300" value="30" class="border rounded-lg px-3 py-2 text-sm" style="width:100%" /></label>
+      <label class="text-xs text-gray-500">Opens<input id="x-opens" type="datetime-local" class="border rounded-lg px-3 py-2 text-sm" style="width:100%" /></label>
+      <label class="text-xs text-gray-500">Closes<input id="x-closes" type="datetime-local" class="border rounded-lg px-3 py-2 text-sm" style="width:100%" /></label>
+      <div class="md:col-span-6 flex items-center gap-3"><button id="x-save" class="bg-[rgb(var(--c-primary))] text-[rgb(var(--c-on-primary))] rounded-lg px-4 py-2 text-sm">Create and add questions</button><span id="x-msg" class="text-sm text-red-700"></span></div>
+    </form>
+    <div class="overflow-x-auto"><table class="w-full text-sm" id="exam-table"></table></div>
+  </section>
+  <section id="q-manager" class="hidden bg-white border rounded-xl">
+    <div class="p-4 border-b flex flex-wrap justify-between gap-2"><div><h2 class="font-semibold text-lg" id="q-title"></h2><p class="text-sm text-gray-500" id="q-sub"></p></div>
+      <div class="flex gap-2"><button id="q-export" class="border rounded-lg px-4 py-2 text-sm">Export CSV</button><button id="q-publish" class="bg-[rgb(var(--c-primary))] text-[rgb(var(--c-on-primary))] rounded-lg px-4 py-2 text-sm">Publish exam</button><button id="q-close" class="border rounded-lg px-4 py-2 text-sm">Close</button></div></div>
+    <div id="q-edit" class="p-4 border-b grid gap-3">
+      <textarea id="q-text" rows="2" placeholder="Question" class="border rounded-lg px-3 py-2 text-sm"></textarea>
+      <div class="grid gap-2 md:grid-cols-5"><input id="q-a" placeholder="Option A" class="border rounded-lg px-3 py-2 text-sm" /><input id="q-b" placeholder="Option B" class="border rounded-lg px-3 py-2 text-sm" /><input id="q-c" placeholder="Option C" class="border rounded-lg px-3 py-2 text-sm" /><input id="q-d" placeholder="Option D" class="border rounded-lg px-3 py-2 text-sm" /><select id="q-correct" class="border rounded-lg px-3 py-2 text-sm"><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
+      <div class="flex flex-wrap items-center gap-3"><button id="q-add" class="bg-[rgb(var(--c-primary))] text-[rgb(var(--c-on-primary))] rounded-lg px-4 py-2 text-sm">Add question</button><span id="q-msg" class="text-sm text-gray-600"></span></div>
+      <details><summary class="cursor-pointer text-sm text-gray-600">Paste many questions (from Excel: question, A, B, C, D, correct letter)</summary><textarea id="q-paste" rows="5" class="mt-2 w-full border rounded-lg px-3 py-2 text-sm font-mono"></textarea><button id="q-import" class="border rounded-lg px-4 py-2 text-sm" style="margin-top:8px">Import pasted questions</button></details>
+    </div>
+    <div class="overflow-x-auto"><table class="w-full text-sm" id="q-table"></table></div>
+  </section>
+  <section id="exam-results" class="hidden bg-white border rounded-xl">
+    <div class="p-4 border-b flex flex-wrap justify-between gap-2"><div><h2 class="font-semibold text-lg" id="r-title"></h2><p class="text-sm text-gray-500" id="r-sub"></p></div><div class="flex gap-2"><button id="r-csv" class="border rounded-lg px-4 py-2 text-sm">Export CSV</button><button id="r-close" class="border rounded-lg px-4 py-2 text-sm">Close</button></div></div>
+    <div class="overflow-x-auto"><table class="w-full text-sm" id="r-table"></table></div>
+  </section>
+</div>
+</main>
+<script src="./scripts/supabase.min.js"></script>
+<script src="./scripts/staff-common.js"></script>
+<script>
+const S = Staff, $ = S.$, db = S.db, esc = S.esc;
+let D, SECTION, EXAMS = [], QEXAM = null, QS = [], RLIST = [];
+const st = { key: "avg", dir: "desc" };
+const COLS = [["full_name", "Student"], ["candidate_no", "Student no."], ["class_level", "Class"], ["exams", "Exams taken"], ["avg", "Performance"]];
+(async () => {
+  try {
+    await window.BRAND_READY;
+    const ctx = await S.start(["teacher_junior", "teacher_senior"]);
+    if (!ctx) return;
+    SECTION = ctx.me.role === "teacher_junior" ? "junior" : "senior";
+    $("title").textContent += " · " + S.cap(SECTION).toUpperCase();
+    $("sec-name").textContent = S.cap(SECTION);
+    D = await S.load(ctx.portal.id, SECTION);
+    build(); await loadExams();
+    $("status").classList.add("hidden"); $("app").classList.remove("hidden");
+  } catch (e) { console.error(e); S.status("Could not load: " + esc(e.message)); }
+})();
+function build() {
+  const rows = D.rows, part = rows.filter((s) => s.exams > 0).length;
+  S.kpis([["Students", S.fmt(rows.length)], ["Classes", S.fmt(new Set(rows.map((s) => s.class_level)).size)], ["Exams taken", S.fmt(D.results.length)], ["Average score", S.pct(S.avg(D.results.map((r) => r.p)))], ["Participation", rows.length ? S.pct((part / rows.length) * 100) : "–"], ["Flags", S.fmt(D.incidents.length)]]);
+  $("f-class").innerHTML = '<option value="">All classes</option>' + [...new Set(rows.map((s) => s.class_level))].sort().map((c) => `<option>${esc(c)}</option>`).join("");
+  S.classTable($("class-table"), rows, (c) => { $("f-class").value = c; draw(); $("student-table").scrollIntoView({ behavior: "smooth" }); });
+  S.panels($("panels"), D); draw();
+}
+const visible = () => { const cl = $("f-class").value, q = $("f-search").value.toLowerCase(); return D.rows.filter((s) => (!cl || s.class_level === cl) && (!q || (s.full_name || "").toLowerCase().includes(q))); };
+function draw() { const rows = S.studentTable($("student-table"), visible(), st, COLS, draw); $("detail-sub").textContent = `${rows.length} student${rows.length === 1 ? "" : "s"} shown` + (rows.length > 500 ? " (first 500 displayed – export CSV for all)" : ""); }
+$("f-class").onchange = draw; $("f-search").oninput = draw;
+$("f-csv").onclick = () => S.csv("students.csv", ["Student", "Student no.", "Class", "Exams", "Average %"], visible().map((s) => [s.full_name, s.candidate_no, s.class_level, s.exams, s.avg == null ? "" : s.avg.toFixed(1)]));
+
+// ---------- exams ----------
+const stateOf = (e) => { const n = Date.now(); return !e.published ? "Draft" : !e.is_active ? "Switched off" : e.opens_at && new Date(e.opens_at) > n ? "Scheduled" : e.closes_at && new Date(e.closes_at) < n ? "Closed" : "Open"; };
+const takenBy = (id) => D.allResults.filter((r) => r.class_exam_id === id);
+async function loadExams() {
+  const { data, error } = await db.from("class_exams").select("*").order("created_at", { ascending: false });
+  EXAMS = error ? [] : data; renderExams();
+}
+function renderExams() {
+  $("exam-table").innerHTML = '<thead class="bg-gray-50 text-left text-gray-600"><tr><th class="p-3">Exam</th><th class="p-3">Status</th><th class="p-3">Questions</th><th class="p-3">Taken</th><th class="p-3">Average</th><th class="p-3"></th></tr></thead><tbody>' +
+    (EXAMS.map((e) => { const t = takenBy(e.id); return `<tr class="border-t"><td class="p-3"><b>${esc(e.title)}</b><div class="text-xs text-gray-500">${esc(e.subject)} · ${e.duration_minutes} min</div></td><td class="p-3">${stateOf(e)}</td><td class="p-3">${e.question_count}</td><td class="p-3">${t.length}</td><td class="p-3">${S.pct(S.avg(t.map((r) => r.p)))}</td>
+      <td class="p-3 whitespace-nowrap"><button class="text-blue-700 mr-2" data-a="q" data-id="${e.id}">Questions</button>${e.published ? `<button class="text-blue-700 mr-2" data-a="r" data-id="${e.id}">Results</button><button class="text-blue-700 mr-2" data-a="e" data-id="${e.id}">Edit</button>` : ""}<button class="text-red-700" data-a="d" data-id="${e.id}">Delete</button></td></tr>`; }).join("") || '<tr><td class="p-4 text-gray-500" colspan="6">No exams yet. Click “New exam”.</td></tr>') + "</tbody>";
+  document.querySelectorAll("#exam-table [data-a]").forEach((b) => (b.onclick = () => ({ q: openQuestions, r: openResults, e: editExam, d: deleteExam })[b.dataset.a](b.dataset.id)));
+}
+$("x-new").onclick = () => $("exam-form").classList.toggle("hidden");
+$("exam-form").onsubmit = async (ev) => {
+  ev.preventDefault();
+  const o = $("x-opens").value ? new Date($("x-opens").value) : null, c = $("x-closes").value ? new Date($("x-closes").value) : null;
+  if (o && c && c <= o) return ($("x-msg").textContent = "Closing time must be after opening time.");
+  $("x-save").disabled = true; $("x-msg").textContent = "Creating…";
+  const { data, error } = await db.rpc("create_class_exam", { p_title: $("x-title").value.trim(), p_subject: $("x-subject").value.trim(), p_duration: Number($("x-duration").value), p_opens: o ? o.toISOString() : null, p_closes: c ? c.toISOString() : null });
+  $("x-save").disabled = false;
+  if (error) return ($("x-msg").textContent = "Could not create: " + error.message);
+  $("exam-form").reset(); $("exam-form").classList.add("hidden"); $("x-msg").textContent = "";
+  await loadExams(); openQuestions(data);
+};
+const local = (iso) => (iso ? new Date(iso).toLocaleString("sv").slice(0, 16) : "");
+async function editExam(id) {
+  const e = EXAMS.find((x) => x.id === id); if (!e) return;
+  const d = prompt("Duration in minutes", e.duration_minutes); if (d === null) return;
+  const o = prompt("Opens at (YYYY-MM-DD HH:MM, blank = open now)", local(e.opens_at)); if (o === null) return;
+  const c = prompt("Closes at (YYYY-MM-DD HH:MM, blank = no closing time)", local(e.closes_at)); if (c === null) return;
+  const on = confirm("Keep this exam switched ON for students?\nOK = on, Cancel = switch off");
+  const t = (v) => (v.trim() ? new Date(v.trim().replace(" ", "T")) : null);
+  const od = t(o), cd = t(c);
+  if ((od && isNaN(od)) || (cd && isNaN(cd)) || !(Number(d) > 0)) return alert("Please check the dates and duration.");
+  const { error } = await db.rpc("update_class_exam", { p_id: id, p_opens: od ? od.toISOString() : null, p_closes: cd ? cd.toISOString() : null, p_duration: Number(d), p_active: on });
+  if (error) return alert(error.message);
+  await loadExams();
+}
+async function deleteExam(id) {
+  const e = EXAMS.find((x) => x.id === id), n = takenBy(id).length;
+  if (!confirm(`Delete “${e.title}”?` + (n ? `\n${n} student result(s) will stay but lose the link to this exam.` : ""))) return;
+  const { error } = await db.rpc("delete_class_exam", { p_id: id });
+  if (error) return alert(error.message);
+  if (QEXAM && QEXAM.id === id) $("q-manager").classList.add("hidden");
+  await loadExams();
+}
+// ---------- questions ----------
+async function openQuestions(id) { QEXAM = EXAMS.find((e) => e.id === id); if (!QEXAM) return; $("q-manager").classList.remove("hidden"); $("q-msg").textContent = ""; await loadQs(); $("q-manager").scrollIntoView({ behavior: "smooth" }); }
+async function loadQs() {
+  const { data, error } = await db.from("class_exam_questions").select("*").eq("exam_id", QEXAM.id).order("position").order("id").limit(1000);
+  if (error) $("q-msg").textContent = error.message; QS = data || []; renderQs();
+}
+function renderQs() {
+  const draft = !QEXAM.published;
+  $("q-title").textContent = QEXAM.title + " – questions";
+  $("q-sub").textContent = `${QEXAM.subject} · ${QS.length} question${QS.length === 1 ? "" : "s"} · ${QEXAM.duration_minutes} min` + (draft ? "" : " · published (questions are locked)");
+  $("q-edit").classList.toggle("hidden", !draft); $("q-publish").classList.toggle("hidden", !draft);
+  $("q-table").innerHTML = '<thead class="bg-gray-50 text-left text-gray-600"><tr><th class="p-3">#</th><th class="p-3">Question</th><th class="p-3">A</th><th class="p-3">B</th><th class="p-3">C</th><th class="p-3">D</th><th class="p-3">Ans</th><th></th></tr></thead><tbody>' +
+    QS.map((q, i) => `<tr class="border-t align-top"><td class="p-3">${i + 1}</td><td class="p-3">${esc(q.question_text)}</td><td class="p-3">${esc(q.option_a)}</td><td class="p-3">${esc(q.option_b)}</td><td class="p-3">${esc(q.option_c)}</td><td class="p-3">${esc(q.option_d)}</td><td class="p-3 font-bold">${esc(q.correct_answer)}</td><td class="p-3">${draft ? `<button class="text-red-700" data-dq="${q.id}">Delete</button>` : ""}</td></tr>`).join("") + "</tbody>";
+  document.querySelectorAll("[data-dq]").forEach((b) => (b.onclick = async () => { const { error } = await db.from("class_exam_questions").delete().eq("id", b.dataset.dq); if (error) return ($("q-msg").textContent = error.message); await loadQs(); await loadExams(); }));
+}
+async function insertQs(rows) {
+  if (QS.length + rows.length > 300) throw new Error("An exam can have at most 300 questions.");
+  let pos = QS.length ? Math.max(...QS.map((q) => q.position || 0)) + 1 : 1;
+  const payload = rows.map((r) => ({ exam_id: QEXAM.id, position: pos++, ...r }));
+  for (let i = 0; i < payload.length; i += 100) { const { error } = await db.from("class_exam_questions").insert(payload.slice(i, i + 100)); if (error) throw error; }
+}
+$("q-add").onclick = async () => {
+  const r = { question_text: $("q-text").value.trim(), option_a: $("q-a").value.trim(), option_b: $("q-b").value.trim(), option_c: $("q-c").value.trim(), option_d: $("q-d").value.trim(), correct_answer: $("q-correct").value };
+  if (!r.question_text || !r.option_a || !r.option_b || !r.option_c || !r.option_d) return ($("q-msg").textContent = "Fill in the question and all four options.");
+  try { await insertQs([r]); ["q-text", "q-a", "q-b", "q-c", "q-d"].forEach((i) => ($(i).value = "")); $("q-msg").textContent = "Question added."; await loadQs(); await loadExams(); } catch (e) { $("q-msg").textContent = e.message; }
+};
+function parseTable(t) {
+  t = t.replace(/^\uFEFF/, ""); const first = t.split(/\r?\n/)[0] || "", d = (first.match(/\t/g) || []).length > (first.match(/,/g) || []).length ? "\t" : ",";
+  const rows = []; let row = [], cur = "", q = false;
+  for (let i = 0; i < t.length; i++) { const c = t[i];
+    if (q) { if (c === '"' && t[i + 1] === '"') { cur += '"'; i++; } else if (c === '"') q = false; else cur += c; }
+    else if (c === '"') q = true; else if (c === d) { row.push(cur); cur = ""; } else if (c === "\n" || c === "\r") { if (c === "\r" && t[i + 1] === "\n") i++; row.push(cur); cur = ""; if (row.some((x) => x.trim())) rows.push(row); row = []; } else cur += c; }
+  row.push(cur); if (row.some((x) => x.trim())) rows.push(row); return rows;
+}
+$("q-import").onclick = async () => {
+  let rows = parseTable($("q-paste").value); if (rows.length && /^question/i.test(rows[0][0].trim())) rows.shift();
+  const out = []; let bad = 0;
+  rows.forEach((r) => { const c = (r[5] || "").trim().toUpperCase().charAt(0); if (r.length < 6 || !r[0].trim() || !"ABCD".includes(c) || !c) return bad++; out.push({ question_text: r[0].trim(), option_a: r[1].trim(), option_b: r[2].trim(), option_c: r[3].trim(), option_d: r[4].trim(), correct_answer: c }); });
+  if (!out.length) return ($("q-msg").textContent = "No valid rows found. Use: question, A, B, C, D, correct letter.");
+  try { await insertQs(out); $("q-paste").value = ""; $("q-msg").textContent = `${out.length} added` + (bad ? `, ${bad} skipped.` : "."); await loadQs(); await loadExams(); } catch (e) { $("q-msg").textContent = e.message; }
+};
+$("q-export").onclick = () => QS.length ? S.csv(QEXAM.title.replace(/\W+/g, "_") + "-questions.csv", ["question", "option_a", "option_b", "option_c", "option_d", "correct"], QS.map((q) => [q.question_text, q.option_a, q.option_b, q.option_c, q.option_d, q.correct_answer])) : alert("No questions yet.");
+$("q-close").onclick = () => $("q-manager").classList.add("hidden");
+$("q-publish").onclick = async () => {
+  if (!QS.length) return ($("q-msg").textContent = "Add at least one question first.");
+  if (!confirm(`Publish “${QEXAM.title}” with ${QS.length} questions?\nStudents will see it, and the questions can no longer be changed.`)) return;
+  const { error } = await db.rpc("publish_class_exam", { p_id: QEXAM.id });
+  if (error) return ($("q-msg").textContent = error.message);
+  await loadExams(); QEXAM = EXAMS.find((e) => e.id === QEXAM.id); renderQs();
+};
+// ---------- results ----------
+function openResults(id) {
+  const e = EXAMS.find((x) => x.id === id); if (!e) return;
+  RLIST = takenBy(id).filter((r) => r.s).sort((a, b) => b.p - a.p);
+  $("r-title").textContent = e.title + " – results";
+  $("r-sub").textContent = `${RLIST.length} of ${D.rows.length} students took it · average ${S.pct(S.avg(RLIST.map((r) => r.p)))}`;
+  $("r-table").innerHTML = '<thead class="bg-gray-50 text-left text-gray-600"><tr><th class="p-3">Student</th><th class="p-3">Class</th><th class="p-3">Score</th><th class="p-3">%</th><th class="p-3">Date</th></tr></thead><tbody>' +
+    (RLIST.map((r) => `<tr class="border-t"><td class="p-3">${esc(r.s.full_name)}</td><td class="p-3">${esc(r.s.class_level)}</td><td class="p-3">${r.score}/${r.total}</td><td class="p-3">${S.pct(r.p)}</td><td class="p-3">${new Date(r.created_at).toLocaleString()}</td></tr>`).join("") || '<tr><td class="p-4 text-gray-500" colspan="5">Nobody has taken this exam yet.</td></tr>') + "</tbody>";
+  $("r-csv").onclick = () => S.csv(e.title.replace(/\W+/g, "_") + "-results.csv", ["Student", "Class", "Score", "Total", "Percent", "Date"], RLIST.map((r) => [r.s.full_name, r.s.class_level, r.score, r.total, r.p.toFixed(1), r.created_at]));
+  $("r-close").onclick = () => $("exam-results").classList.add("hidden");
+  $("exam-results").classList.remove("hidden"); $("exam-results").scrollIntoView({ behavior: "smooth" });
+}
+</script>
+</body>
+</html>
