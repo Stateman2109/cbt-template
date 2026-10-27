@@ -32,6 +32,7 @@
     <div class="overflow-x-auto"><table class="w-full text-sm" id="student-table"></table></div>
   </section>
   <section id="panels" class="grid gap-4 md:grid-cols-2"></section>
+  <section id="irreg" class="bg-white border rounded-xl"></section>
 
   <section class="bg-white border rounded-xl">
     <div class="p-4 border-b flex flex-wrap justify-between items-center gap-2"><div><h2 class="font-semibold text-lg">My exams</h2><p class="text-sm text-gray-500">Only your <b id="sec-name"></b> students will see these exams.</p></div><button id="x-new" class="bg-[rgb(var(--c-primary))] text-[rgb(var(--c-on-primary))] rounded-lg px-4 py-2 text-sm">New exam</button></div>
@@ -57,7 +58,7 @@
     <div class="overflow-x-auto"><table class="w-full text-sm" id="q-table"></table></div>
   </section>
   <section id="exam-results" class="hidden bg-white border rounded-xl">
-    <div class="p-4 border-b flex flex-wrap justify-between gap-2"><div><h2 class="font-semibold text-lg" id="r-title"></h2><p class="text-sm text-gray-500" id="r-sub"></p></div><div class="flex gap-2"><button id="r-csv" class="border rounded-lg px-4 py-2 text-sm">Export CSV</button><button id="r-close" class="border rounded-lg px-4 py-2 text-sm">Close</button></div></div>
+    <div class="p-4 border-b flex flex-wrap justify-between gap-2"><div><h2 class="font-semibold text-lg" id="r-title"></h2><p class="text-sm text-gray-500" id="r-sub"></p></div><div class="flex gap-2"><button id="r-csv" class="border rounded-lg px-4 py-2 text-sm">Download results</button><button id="r-close" class="border rounded-lg px-4 py-2 text-sm">Close</button></div></div>
     <div class="overflow-x-auto"><table class="w-full text-sm" id="r-table"></table></div>
   </section>
 </div>
@@ -66,7 +67,7 @@
 <script src="./scripts/staff-common.js"></script>
 <script>
 const S = Staff, $ = S.$, db = S.db, esc = S.esc;
-let D, SECTION, EXAMS = [], QEXAM = null, QS = [], RLIST = [];
+let D, PORTAL_ID, SECTION, EXAMS = [], QEXAM = null, QS = [], RLIST = [];
 const st = { key: "avg", dir: "desc" };
 const COLS = [["full_name", "Student"], ["candidate_no", "Student no."], ["class_level", "Class"], ["exams", "Exams taken"], ["avg", "Performance"]];
 (async () => {
@@ -77,6 +78,7 @@ const COLS = [["full_name", "Student"], ["candidate_no", "Student no."], ["class
     SECTION = ctx.me.role === "teacher_junior" ? "junior" : "senior";
     $("title").textContent += " · " + S.cap(SECTION).toUpperCase();
     $("sec-name").textContent = S.cap(SECTION);
+    PORTAL_ID = ctx.portal.id;
     D = await S.load(ctx.portal.id, SECTION);
     build(); await loadExams();
     $("status").classList.add("hidden"); $("app").classList.remove("hidden");
@@ -87,7 +89,16 @@ function build() {
   S.kpis([["Students", S.fmt(rows.length)], ["Classes", S.fmt(new Set(rows.map((s) => s.class_level)).size)], ["Exams taken", S.fmt(D.results.length)], ["Average score", S.pct(S.avg(D.results.map((r) => r.p)))], ["Participation", rows.length ? S.pct((part / rows.length) * 100) : "–"], ["Flags", S.fmt(D.incidents.length)]]);
   $("f-class").innerHTML = '<option value="">All classes</option>' + [...new Set(rows.map((s) => s.class_level))].sort().map((c) => `<option>${esc(c)}</option>`).join("");
   S.classTable($("class-table"), rows, (c) => { $("f-class").value = c; draw(); $("student-table").scrollIntoView({ behavior: "smooth" }); });
-  S.panels($("panels"), D); draw();
+  S.panels($("panels"), D); drawIrreg(); draw();
+}
+function drawIrreg() { S.irreg($("irreg"), D, { onReopen: reopen }); }
+async function reopen(examId, studentId, name, exam) {
+  const why = prompt(`Reopen “${exam}” for ${name} only?\nThe old attempt is saved in a history log and they get one fresh attempt with full time.\n\nReason (for example: network problem):`);
+  if (why === null) return;
+  const { error } = await db.rpc("reopen_class_exam", { p_exam: examId, p_student: studentId, p_reason: why });
+  if (error) return alert("Could not reopen: " + error.message);
+  alert(name + " can now take the exam again.");
+  D = await S.load(PORTAL_ID, SECTION); build(); await loadExams();
 }
 const visible = () => { const cl = $("f-class").value, q = $("f-search").value.toLowerCase(); return D.rows.filter((s) => (!cl || s.class_level === cl) && (!q || (s.full_name || "").toLowerCase().includes(q))); };
 function draw() { const rows = S.studentTable($("student-table"), visible(), st, COLS, draw); $("detail-sub").textContent = `${rows.length} student${rows.length === 1 ? "" : "s"} shown` + (rows.length > 500 ? " (first 500 displayed – export CSV for all)" : ""); }
@@ -104,8 +115,8 @@ async function loadExams() {
 function renderExams() {
   $("exam-table").innerHTML = '<thead class="bg-gray-50 text-left text-gray-600"><tr><th class="p-3">Exam</th><th class="p-3">Status</th><th class="p-3">Questions</th><th class="p-3">Taken</th><th class="p-3">Average</th><th class="p-3"></th></tr></thead><tbody>' +
     (EXAMS.map((e) => { const t = takenBy(e.id); return `<tr class="border-t"><td class="p-3"><b>${esc(e.title)}</b><div class="text-xs text-gray-500">${esc(e.subject)} · ${e.duration_minutes} min</div></td><td class="p-3">${stateOf(e)}</td><td class="p-3">${e.question_count}</td><td class="p-3">${t.length}</td><td class="p-3">${S.pct(S.avg(t.map((r) => r.p)))}</td>
-      <td class="p-3 whitespace-nowrap"><button class="text-blue-700 mr-2" data-a="q" data-id="${e.id}">Questions</button>${e.published ? `<button class="text-blue-700 mr-2" data-a="r" data-id="${e.id}">Results</button><button class="text-blue-700 mr-2" data-a="e" data-id="${e.id}">Edit</button>` : ""}<button class="text-red-700" data-a="d" data-id="${e.id}">Delete</button></td></tr>`; }).join("") || '<tr><td class="p-4 text-gray-500" colspan="6">No exams yet. Click “New exam”.</td></tr>') + "</tbody>";
-  document.querySelectorAll("#exam-table [data-a]").forEach((b) => (b.onclick = () => ({ q: openQuestions, r: openResults, e: editExam, d: deleteExam })[b.dataset.a](b.dataset.id)));
+      <td class="p-3 whitespace-nowrap"><button class="text-blue-700 mr-2" data-a="q" data-id="${e.id}">Questions</button>${e.published ? `<button class="text-blue-700 mr-2" data-a="r" data-id="${e.id}">Results</button><button class="text-blue-700 mr-2" data-a="dl" data-id="${e.id}">Download results</button><button class="text-blue-700 mr-2" data-a="e" data-id="${e.id}">Edit</button>` : ""}<button class="text-red-700" data-a="d" data-id="${e.id}">Delete</button></td></tr>`; }).join("") || '<tr><td class="p-4 text-gray-500" colspan="6">No exams yet. Click “New exam”.</td></tr>') + "</tbody>";
+  document.querySelectorAll("#exam-table [data-a]").forEach((b) => (b.onclick = () => ({ q: openQuestions, r: openResults, dl: dlResults, e: editExam, d: deleteExam })[b.dataset.a](b.dataset.id)));
 }
 $("x-new").onclick = () => $("exam-form").classList.toggle("hidden");
 $("exam-form").onsubmit = async (ev) => {
@@ -192,6 +203,13 @@ $("q-publish").onclick = async () => {
   await loadExams(); QEXAM = EXAMS.find((e) => e.id === QEXAM.id); renderQs();
 };
 // ---------- results ----------
+// Download: Name, Class, Subject, Score, Out of, Performance (%)
+function dlResults(id) {
+  const e = EXAMS.find((x) => x.id === id); if (!e) return;
+  const list = takenBy(id).filter((r) => r.s).sort((a, b) => String(a.s.class_level).localeCompare(String(b.s.class_level)) || String(a.s.full_name).localeCompare(String(b.s.full_name)));
+  if (!list.length) return alert("Nobody has taken this exam yet.");
+  S.csv(e.title.replace(/\W+/g, "_") + "-results.csv", ["Name", "Class", "Subject", "Score", "Out of", "Performance (%)"], list.map((r) => [r.s.full_name, r.s.class_level, e.subject, r.score, r.total, r.p.toFixed(1)]));
+}
 function openResults(id) {
   const e = EXAMS.find((x) => x.id === id); if (!e) return;
   RLIST = takenBy(id).filter((r) => r.s).sort((a, b) => b.p - a.p);
@@ -199,7 +217,7 @@ function openResults(id) {
   $("r-sub").textContent = `${RLIST.length} of ${D.rows.length} students took it · average ${S.pct(S.avg(RLIST.map((r) => r.p)))}`;
   $("r-table").innerHTML = '<thead class="bg-gray-50 text-left text-gray-600"><tr><th class="p-3">Student</th><th class="p-3">Class</th><th class="p-3">Score</th><th class="p-3">%</th><th class="p-3">Date</th></tr></thead><tbody>' +
     (RLIST.map((r) => `<tr class="border-t"><td class="p-3">${esc(r.s.full_name)}</td><td class="p-3">${esc(r.s.class_level)}</td><td class="p-3">${r.score}/${r.total}</td><td class="p-3">${S.pct(r.p)}</td><td class="p-3">${new Date(r.created_at).toLocaleString()}</td></tr>`).join("") || '<tr><td class="p-4 text-gray-500" colspan="5">Nobody has taken this exam yet.</td></tr>') + "</tbody>";
-  $("r-csv").onclick = () => S.csv(e.title.replace(/\W+/g, "_") + "-results.csv", ["Student", "Class", "Score", "Total", "Percent", "Date"], RLIST.map((r) => [r.s.full_name, r.s.class_level, r.score, r.total, r.p.toFixed(1), r.created_at]));
+  $("r-csv").onclick = () => dlResults(id);
   $("r-close").onclick = () => $("exam-results").classList.add("hidden");
   $("exam-results").classList.remove("hidden"); $("exam-results").scrollIntoView({ behavior: "smooth" });
 }

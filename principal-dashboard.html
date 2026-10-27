@@ -33,6 +33,7 @@
     <div class="overflow-x-auto"><table class="w-full text-sm" id="student-table"></table></div>
   </section>
   <section id="panels" class="grid gap-4 md:grid-cols-2"></section>
+  <section id="irreg" class="bg-white border rounded-xl"></section>
 
   <section class="bg-white border rounded-xl"><div class="p-4 border-b"><h2 class="font-semibold text-lg">Exams set by teachers</h2><p class="text-sm text-gray-500">Read-only. Teachers create and publish these from their own dashboards.</p></div><div class="overflow-x-auto"><table class="w-full text-sm" id="exam-table"></table></div></section>
 </div>
@@ -65,7 +66,7 @@ function build() {
   $("f-section").innerHTML = '<option value="">Junior + Senior</option><option>Junior</option><option>Senior</option>';
   $("f-class").innerHTML = '<option value="">All classes</option>' + [...new Set(rows.map((s) => s.class_level))].sort().map((c) => `<option>${esc(c)}</option>`).join("");
   S.classTable($("class-table"), rows, (c) => { $("f-class").value = c; draw(); $("student-table").scrollIntoView({ behavior: "smooth" }); });
-  S.panels($("panels"), D); exams(); draw();
+  S.panels($("panels"), D); S.irreg($("irreg"), D, {}); exams(); draw();
 }
 const visible = () => { const se = $("f-section").value, cl = $("f-class").value, q = $("f-search").value.toLowerCase(); return D.rows.filter((s) => (!se || s.section === se) && (!cl || s.class_level === cl) && (!q || (s.full_name || "").toLowerCase().includes(q))); };
 function draw() { const rows = S.studentTable($("student-table"), visible(), st, COLS, draw); $("detail-sub").textContent = `${rows.length} student${rows.length === 1 ? "" : "s"} shown` + (rows.length > 500 ? " (first 500 displayed – export CSV for all)" : ""); }

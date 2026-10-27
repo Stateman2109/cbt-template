@@ -268,11 +268,69 @@
           if (done && done.length) { localStorage.removeItem("examData"); alert("You have already taken this exam."); window.location.href = "student-dashboard.html"; return; }
           const { data: cq, error: cqErr } = await dbClient.from("class_exam_questions").select("*").eq("exam_id", ce.id).order("position", { ascending: true });
           if (cqErr || !cq || !cq.length) { document.getElementById("questions-container").innerHTML = "<p>This exam has no questions yet.</p>"; return; }
-          examTime = ce.duration_minutes * 60;
-          allQuestions = shuffleArray(cq).map((q) => ({ ...q, correct_answer: normalizeAnswer(q) }));
-          renderQuestion();
-          startExamTimer();
-          setInterval(() => { if (answerKeyGlobal) localStorage.setItem(answerKeyGlobal, JSON.stringify(userAnswers)); }, 5000);
+          // ---- same paper and same clock after a refresh; leaving the page 3 times locks (submits) the exam ----
+          const K = answerKeyGlobal, MAX_LEAVES = 3;
+          const sget = (s) => localStorage.getItem(K + s), sset = (s, v) => { try { localStorage.setItem(K + s, String(v)); } catch (e) {} };
+          const incident = async (kind, details, countNo, away) => {
+            try { await dbClient.from("exam_incidents").insert({ user_id: uid, kind, details: `${ce.title}: ${details}`, exam_title: ce.title, subject: ce.subject, count_no: countNo || null, away_seconds: away ?? null, class_exam_id: ce.id }); } catch (e) { console.warn("Could not record incident", e); }
+          };
+          // a teacher reopened this exam for the student: forget the old locked attempt on this device
+          try {
+            const { data: ro } = await dbClient.from("class_exam_reopens").select("reopened_at").eq("exam_id", ce.id).eq("user_id", uid).order("reopened_at", { ascending: false }).limit(1);
+            const stamp = ro && ro[0] && ro[0].reopened_at, seenKey = "reopen_seen_" + ce.id;
+            if (stamp && localStorage.getItem(seenKey) !== stamp) { ["", "__qids", "__end", "__idx", "__leaves", "__alive"].forEach((s) => localStorage.removeItem(K + s)); localStorage.setItem(seenKey, stamp); }
+          } catch (e) {}
+          let ordered = null;
+          try {
+            const ids = JSON.parse(sget("__qids") || "null");
+            if (Array.isArray(ids) && ids.length) { const byId = new Map(cq.map((q) => [String(q.id), q])); const f = ids.map((i) => byId.get(i)).filter(Boolean); if (f.length === ids.length) ordered = f; }
+          } catch (e) {}
+          if (!ordered) {
+            ordered = shuffleArray(cq);
+            ["__end", "__idx", "__leaves", "__alive"].forEach((s) => localStorage.removeItem(K + s));
+            sset("__qids", JSON.stringify(ordered.map((q) => String(q.id)))); localStorage.setItem(K, "{}");
+          }
+          allQuestions = ordered.map((q) => ({ ...q, correct_answer: normalizeAnswer(q) }));
+          const savedEnd = Number(sget("__end")) || 0, resuming = savedEnd > 0;
+          let leaves = resuming ? Number(sget("__leaves")) || 0 : 0, locking = false, hideTimer = null;
+          try { userAnswers = JSON.parse(localStorage.getItem(K) || "{}") || {}; } catch (e) { userAnswers = {}; }
+          currentQuestionIndex = resuming ? Math.min(Number(sget("__idx")) || 0, allQuestions.length - 1) : 0;
+          const warn = () => {
+            if (examSubmitted || locking || leaves <= 0 || leaves >= MAX_LEAVES) return;
+            alert(leaves === MAX_LEAVES - 1 ? `FINAL WARNING (${leaves} of ${MAX_LEAVES})\nYou left the exam page again. This is recorded and reported to your teacher.\nIf you leave one more time, your exam will be submitted immediately.` : `Warning ${leaves} of ${MAX_LEAVES}\nYou left the exam page. This is recorded and reported to your teacher.\nLeaving ${MAX_LEAVES - leaves} more times will submit your exam.`);
+          };
+          const strike = async () => {
+            if (locking || examSubmitted) return;
+            leaves++; sset("__leaves", leaves);
+            if (leaves >= MAX_LEAVES) { locking = true; await incident("tab_switch", `left the exam page (${leaves} of ${MAX_LEAVES})`, leaves); await incident("auto_submitted", `exam submitted automatically after leaving the page ${MAX_LEAVES} times`, leaves); submitExam(); }
+            else incident("tab_switch", `left the exam page (${leaves} of ${MAX_LEAVES})`, leaves);
+          };
+          const begin = () => {
+            examTime = Math.max(1, Math.ceil(((resuming ? savedEnd : Date.now() + ce.duration_minutes * 60000) - Date.now()) / 1000));
+            sset("__end", resuming ? savedEnd : Date.now() + examTime * 1000);
+            renderQuestion(); startExamTimer();
+            setInterval(() => { sset("__alive", Date.now()); localStorage.setItem(K, JSON.stringify(userAnswers)); sset("__idx", currentQuestionIndex); }, 2000);
+            window.addEventListener("beforeunload", (e) => { if (!examSubmitted) { e.preventDefault(); e.returnValue = ""; } });
+            document.addEventListener("visibilitychange", () => {
+              if (examSubmitted) return;
+              if (document.hidden) { if (hideTimer) return; hideTimer = setTimeout(() => { hideTimer = null; strike(); }, 700); }
+              else if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; strike().then(warn); } else warn();
+            });
+          };
+          if (resuming && (savedEnd <= Date.now() || leaves >= MAX_LEAVES)) {
+            // time ran out, or 3 strikes were used, while the student was away: submit what they had
+            renderQuestion(); examTime = 0;
+            if (leaves >= MAX_LEAVES) await incident("auto_submitted", `exam submitted automatically after leaving the page ${MAX_LEAVES} times`, leaves);
+            submitExam();
+          } else if (resuming) {
+            const alive = Number(sget("__alive")) || 0, away = alive ? Math.max(0, Math.round((Date.now() - alive) / 1000)) : null;
+            incident("page_refresh", `reloaded the exam page${away != null ? ` (page was away about ${away}s)` : ""}. Not counted as leaving.`, null, away);
+            alert("Welcome back. Your exam clock kept running while the page was away. Refreshing does not give extra time. The refresh was recorded but is not counted as leaving the page.");
+            begin();
+          } else {
+            alert(`Before you begin\n\n• You have ${ce.duration_minutes} minutes for ${allQuestions.length} questions.\n• The exam is submitted automatically when time ends.\n• The clock does not stop if you refresh or leave the page. A refresh is recorded.\n• Do not switch tabs or apps. Leaving the page is recorded and reported to your teacher. After 3 times, your exam is submitted.`);
+            begin();
+          }
           return;
         }
 
@@ -707,6 +765,7 @@
         // stop double submit (Submit button + timer, or double click)
         if (examSubmitted) return;
         examSubmitted = true;
+        try { if (examDataGlobal?.classExamId && answerKeyGlobal) ["__qids", "__end", "__idx", "__leaves", "__alive"].forEach((s) => localStorage.removeItem(answerKeyGlobal + s)); } catch (e) {}
 
         // count how many questions the student really answered
         const answeredCount = allQuestions.filter((q, i) =>

@@ -40,7 +40,7 @@ window.Staff = (function () {
     var students = (await fetchAll("profiles", "id,full_name,class_level,student_section,role,school_id,candidate_no"))
       .filter(function (p) { return p.role === "student" && p.school_id === portalId && (!section || String(p.student_section || "").toLowerCase() === section); });
     var all = await fetchAll("results", "id,user_id,score,total,subject,created_at,exam_name,class_exam_id");
-    var incidents = [], cols = ["id,kind,user_id,created_at,exam_title,subject,count_no,away_seconds,details", "id,kind,user_id,created_at,subject,details"];
+    var incidents = [], cols = ["id,kind,user_id,created_at,exam_title,subject,count_no,away_seconds,details,class_exam_id", "id,kind,user_id,created_at,exam_title,subject,count_no,away_seconds,details", "id,kind,user_id,created_at,subject,details"];
     for (var i = 0; i < cols.length; i++) { try { incidents = await fetchAll("exam_incidents", cols[i]); break; } catch (e) {} }
     var ids = new Set(students.map(function (s) { return s.id; }));
     var allResults = all.filter(function (r) { return ids.has(r.user_id); }).map(function (r) { return Object.assign({}, r, { p: Number(r.total) > 0 ? (r.score / r.total) * 100 : Number(r.score) }); });
@@ -72,7 +72,7 @@ window.Staff = (function () {
     return rows;
   }
   function csv(name, head, rows) {
-    var t = "\uFEFF" + [head].concat(rows).map(function (r) { return r.map(function (v) { return '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"'; }).join(","); }).join("\n");
+    var t = "\uFEFF" + [head].concat(rows).map(function (r) { return r.map(function (v) { var x = String(v == null ? "" : v); if (/^[=+\-@]/.test(x)) x = "'" + x; return '"' + x.replace(/"/g, '""') + '"'; }).join(","); }).join("\n");
     var a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([t], { type: "text/csv;charset=utf-8" })); a.download = name; a.click();
   }
   function panels(el, D) {
@@ -87,5 +87,30 @@ window.Staff = (function () {
       box("Performance by subject", list(subj.slice(0, 10), function (s) { return row(esc(s[0]) + ' <span class="text-gray-400 text-xs">' + s[2] + " exams</span>", pct(s[1])); })) +
       box("Exam irregularities", list(inc.slice(0, 8), function (s) { return row(esc(s[0]), s[1] + " flag" + (s[1] === 1 ? "" : "s")); }));
   }
-  return { db: db, $: $, esc: esc, fmt: fmt, avg: avg, pct: pct, group: group, cap: cap, PASS: PASS, start: start, load: load, kpis: kpis, classTable: classTable, studentTable: studentTable, csv: csv, panels: panels, status: status };
+
+  // Examination irregularities table. opts.onReopen(examId, studentId, studentName, examTitle) adds a Reopen button for auto-submitted exams.
+  function irreg(el, D, opts) {
+    opts = opts || {};
+    var groups = group(D.incidents.filter(function (i) { return D.byId[i.user_id]; }), function (i) { return i.user_id + "|" + (i.class_exam_id || i.exam_title || i.subject || ""); });
+    var secs = function (n) { return n >= 60 ? Math.floor(n / 60) + "m " + (n % 60) + "s" : n + "s"; };
+    var rows = Object.keys(groups).map(function (k) {
+      var rs = groups[k], s = D.byId[rs[0].user_id];
+      var strikes = rs.filter(function (r) { return r.kind === "tab_switch" || r.kind === "page_leave"; }), refr = rs.filter(function (r) { return r.kind === "page_refresh"; });
+      var times = Math.max.apply(null, [strikes.length, 0].concat(rs.filter(function (r) { return r.kind !== "page_refresh"; }).map(function (r) { return Number(r.count_no) || 0; })));
+      var first = rs.find(function (r) { return r.exam_title || r.details; }) || rs[0];
+      return { s: s, examId: (rs.find(function (r) { return r.class_exam_id; }) || {}).class_exam_id, exam: first.exam_title || String(first.details || "").split(":")[0] || "-", times: times, refreshes: refr.length,
+        away: refr.reduce(function (n, r) { return n + (Number(r.away_seconds) || 0); }, 0), auto: rs.some(function (r) { return r.kind === "auto_submitted"; }),
+        last: rs.map(function (r) { return r.created_at; }).filter(Boolean).sort().pop() };
+    }).sort(function (a, b) { return b.times - a.times || b.refreshes - a.refreshes || String(b.last).localeCompare(String(a.last)); });
+    var locked = rows.filter(function (r) { return r.auto; }).length;
+    var head = ["Student", "Class", "Exam", "Left the page", "Refreshed", "Time away", "Status", "Last time"].concat(opts.onReopen ? ["Action"] : []);
+    var badge = function (r) { return r.auto ? ["Auto-submitted", "bg-red-100 text-red-800"] : r.times > 0 ? ["Warned", "bg-yellow-100 text-yellow-800"] : ["Refreshed only", "bg-blue-100 text-blue-800"]; };
+    el.innerHTML = '<div class="p-4 border-b"><h2 class="font-semibold text-lg">Examination irregularities</h2><p class="text-sm text-gray-500">' + (rows.length ? locked + " exam" + (locked === 1 ? "" : "s") + " auto-submitted · " + rows.length + " student/exam record" + (rows.length === 1 ? "" : "s") : "No irregularities recorded yet.") + '</p><p class="text-xs text-gray-400 mt-1">“Left the page” = switched tab or app (3 times locks the exam). “Refreshed” is not counted as cheating; it is listed so you can check students who may have had network problems. The exam clock never stops.' + (opts.onReopen ? " Use Reopen only for a genuine problem: the student then gets one fresh attempt." : "") + "</p></div>" +
+      (rows.length ? '<div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-gray-50 text-left text-gray-600"><tr>' + head.map(function (h) { return '<th class="p-3">' + h + "</th>"; }).join("") + "</tr></thead><tbody>" +
+        rows.map(function (r, i) { var b = badge(r);
+          return '<tr class="border-t"><td class="p-3 font-medium">' + esc(r.s.full_name) + '</td><td class="p-3">' + esc(r.s.class_level) + '</td><td class="p-3">' + esc(r.exam) + '</td><td class="p-3 font-bold">' + (r.times ? r.times + "×" : "–") + '</td><td class="p-3">' + (r.refreshes ? r.refreshes + "×" : "–") + '</td><td class="p-3">' + (r.away ? secs(r.away) : "–") + '</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded-full ' + b[1] + '">' + b[0] + '</span></td><td class="p-3 whitespace-nowrap">' + (r.last ? new Date(r.last).toLocaleString() : "-") + "</td>" +
+            (opts.onReopen ? '<td class="p-3">' + (r.auto && r.examId ? '<button class="px-3 py-1 rounded-lg text-xs font-semibold bg-[rgb(var(--c-primary))] text-[rgb(var(--c-on-primary))]" data-ro="' + i + '">Reopen</button>' : "–") + "</td>" : "") + "</tr>"; }).join("") + "</tbody></table></div>" : "");
+    if (opts.onReopen) el.querySelectorAll("[data-ro]").forEach(function (b) { b.onclick = function () { var r = rows[b.dataset.ro]; opts.onReopen(r.examId, r.s.id, r.s.full_name, r.exam); }; });
+  }
+  return { irreg: irreg, db: db, $: $, esc: esc, fmt: fmt, avg: avg, pct: pct, group: group, cap: cap, PASS: PASS, start: start, load: load, kpis: kpis, classTable: classTable, studentTable: studentTable, csv: csv, panels: panels, status: status };
 })();
